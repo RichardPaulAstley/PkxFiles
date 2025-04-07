@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35818.85 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PkxFiles", "PkxFiles.csproj", "{2DB099C8-1AB2-4CF5-9854-6C5A431C5DEC}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2DB099C8-1AB2-4CF5-9854-6C5A431C5DEC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2DB099C8-1AB2-4CF5-9854-6C5A431C5DEC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2DB099C8-1AB2-4CF5-9854-6C5A431C5DEC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2DB099C8-1AB2-4CF5-9854-6C5A431C5DEC}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {92419C28-21C7-4D22-B3E1-840AF34A5A8A}
+	EndGlobalSection
+EndGlobal

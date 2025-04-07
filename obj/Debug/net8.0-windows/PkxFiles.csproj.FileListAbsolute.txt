@@ -1,0 +1,16 @@
+D:\Github\PkxFiles\bin\Debug\net8.0-windows\PkxFiles.exe
+D:\Github\PkxFiles\bin\Debug\net8.0-windows\PkxFiles.deps.json
+D:\Github\PkxFiles\bin\Debug\net8.0-windows\PkxFiles.runtimeconfig.json
+D:\Github\PkxFiles\bin\Debug\net8.0-windows\PkxFiles.dll
+D:\Github\PkxFiles\bin\Debug\net8.0-windows\PkxFiles.pdb
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.Form1.resources
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.csproj.GenerateResource.cache
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.GeneratedMSBuildEditorConfig.editorconfig
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.AssemblyInfoInputs.cache
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.AssemblyInfo.cs
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.csproj.CoreCompileInputs.cache
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.dll
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\refint\PkxFiles.dll
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.pdb
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.genruntimeconfig.cache
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\ref\PkxFiles.dll
