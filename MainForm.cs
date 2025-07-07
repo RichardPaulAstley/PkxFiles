@@ -9,7 +9,7 @@ namespace PokeViewer
 {
     public class MainForm : Form
     {
-        private ListView fileListView = new();
+        private TreeView fileTreeView = new();
         private TextBox tagBox = new();
         private TextBox commentBox = new();
         private Button saveButton = new();
@@ -19,16 +19,21 @@ namespace PokeViewer
         private MetadataStore store = new();
         private string currentFolder = "";
 
+        private static readonly string[] PokemonExtensions = new[]
+        {
+            ".pk1", ".pk2", ".pk3", ".pk4", ".pk5", ".pk6", ".pk7", ".pk8",
+            ".bk4", ".ck3", ".pa8", ".pb7", ".pb8", ".pkm", ".rk4", ".sk2", ".xk3"
+        };
+
         public MainForm()
         {
             Text = "PokeViewer";
             Width = 1000;
             Height = 600;
 
-            fileListView.View = View.List;
-            fileListView.Dock = DockStyle.Left;
-            fileListView.Width = 300;
-            fileListView.SelectedIndexChanged += FileListView_SelectedIndexChanged;
+            fileTreeView.Dock = DockStyle.Left;
+            fileTreeView.Width = 300;
+            fileTreeView.AfterSelect += FileTreeView_AfterSelect;
 
             tagBox.Top = 10;
             tagBox.Left = 320;
@@ -53,7 +58,7 @@ namespace PokeViewer
             searchBox.PlaceholderText = "Rechercher par tag ou commentaire...";
             searchBox.TextChanged += SearchBox_TextChanged;
 
-            Controls.Add(fileListView);
+            Controls.Add(fileTreeView);
             Controls.Add(tagBox);
             Controls.Add(commentBox);
             Controls.Add(saveButton);
@@ -64,64 +69,117 @@ namespace PokeViewer
 
         private void LoadFolder()
         {
-            folderBrowser.Description = "Choisir un dossier contenant des fichiers pkX";
+            folderBrowser.Description = "Choisir un dossier contenant des fichiers Pokémon";
             if (folderBrowser.ShowDialog() != DialogResult.OK)
                 return;
 
             currentFolder = folderBrowser.SelectedPath;
             store = MetadataStore.Load(currentFolder);
-            RefreshFileList();
+            RefreshFileTree();
         }
 
-        private void RefreshFileList()
+        private void RefreshFileTree()
         {
-            fileListView.Items.Clear();
-            var files = Directory.GetFiles(currentFolder, "*.pk*", SearchOption.AllDirectories);
-            foreach (var file in files)
-            {
-                var fileName = Path.GetFileName(file);
-                fileListView.Items.Add(new ListViewItem(fileName));
-            }
-        }
-
-        private void FileListView_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            if (fileListView.SelectedItems.Count == 0)
+            fileTreeView.Nodes.Clear();
+            if (string.IsNullOrEmpty(currentFolder) || !Directory.Exists(currentFolder))
                 return;
+            var root = new DirectoryInfo(currentFolder);
+            var rootNode = CreateDirectoryNode(root);
+            fileTreeView.Nodes.Add(rootNode);
+            fileTreeView.ExpandAll();
+        }
 
-            var selected = fileListView.SelectedItems[0].Text;
-            var meta = store.GetOrCreate(selected);
+        private TreeNode CreateDirectoryNode(DirectoryInfo dir)
+        {
+            var node = new TreeNode(dir.Name);
+            // Ajoute les fichiers Pokémon dans ce dossier
+            foreach (var file in dir.GetFiles())
+            {
+                if (PokemonExtensions.Contains(file.Extension.ToLower()))
+                    node.Nodes.Add(new TreeNode(file.Name) { Tag = file.FullName });
+            }
+            // Ajoute les sous-dossiers
+            foreach (var subDir in dir.GetDirectories())
+            {
+                node.Nodes.Add(CreateDirectoryNode(subDir));
+            }
+            return node;
+        }
 
+        private void FileTreeView_AfterSelect(object? sender, TreeViewEventArgs e)
+        {
+            var node = e.Node;
+            if (node == null || node.Tag == null)
+            {
+                tagBox.Text = "";
+                commentBox.Text = "";
+                return;
+            }
+            var filePath = node.Tag.ToString()!;
+            var fileName = Path.GetFileName(filePath);
+            var meta = store.GetOrCreate(fileName);
             tagBox.Text = string.Join(", ", meta.Tags);
             commentBox.Text = meta.Comment;
         }
 
         private void SaveButton_Click(object? sender, EventArgs e)
         {
-            if (fileListView.SelectedItems.Count == 0)
+            if (fileTreeView.SelectedNode == null || fileTreeView.SelectedNode.Tag == null)
                 return;
-
-            var selected = fileListView.SelectedItems[0].Text;
-            var meta = store.GetOrCreate(selected);
+            var filePath = fileTreeView.SelectedNode.Tag.ToString()!;
+            var fileName = Path.GetFileName(filePath);
+            var meta = store.GetOrCreate(fileName);
             meta.Tags = tagBox.Text.Split(",", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
             meta.Comment = commentBox.Text;
-
             store.Save(currentFolder);
         }
 
         private void SearchBox_TextChanged(object? sender, EventArgs e)
         {
             var query = searchBox.Text.Trim().ToLower();
-            fileListView.Items.Clear();
+            fileTreeView.Nodes.Clear();
+            if (string.IsNullOrEmpty(currentFolder) || !Directory.Exists(currentFolder))
+                return;
+            var root = new DirectoryInfo(currentFolder);
+            var rootNode = CreateFilteredDirectoryNode(root, query);
+            if (rootNode != null)
+                fileTreeView.Nodes.Add(rootNode);
+            fileTreeView.ExpandAll();
+        }
 
-            foreach (var kvp in store.Entries)
+        private TreeNode? CreateFilteredDirectoryNode(DirectoryInfo dir, string query)
+        {
+            var node = new TreeNode(dir.Name);
+            bool hasMatch = false;
+            // Fichiers
+            foreach (var file in dir.GetFiles())
             {
-                var tagsMatch = kvp.Value.Tags.Any(tag => tag.ToLower().Contains(query));
-                var commentMatch = kvp.Value.Comment.ToLower().Contains(query);
-
-                if (tagsMatch || commentMatch || query == "")
-                    fileListView.Items.Add(new ListViewItem(kvp.Key));
+                if (PokemonExtensions.Contains(file.Extension.ToLower()))
+                {
+                    var fileName = file.Name.ToLower();
+                    var meta = store.GetOrCreate(file.Name);
+                    bool match = fileName.Contains(query) ||
+                        meta.Tags.Any(tag => tag.ToLower().Contains(query)) ||
+                        meta.Comment.ToLower().Contains(query) ||
+                        string.IsNullOrEmpty(query);
+                    if (match)
+                    {
+                        node.Nodes.Add(new TreeNode(file.Name) { Tag = file.FullName });
+                        hasMatch = true;
+                    }
+                }
             }
+            // Sous-dossiers
+            foreach (var subDir in dir.GetDirectories())
+            {
+                var subNode = CreateFilteredDirectoryNode(subDir, query);
+                if (subNode != null)
+                {
+                    node.Nodes.Add(subNode);
+                    hasMatch = true;
+                }
+            }
+            return hasMatch ? node : null;
         }
     }
 }

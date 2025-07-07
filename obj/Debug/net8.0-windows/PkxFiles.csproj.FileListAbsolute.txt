@@ -14,3 +14,4 @@ D:\Github\PkxFiles\obj\Debug\net8.0-windows\refint\PkxFiles.dll
 D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.pdb
 D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.genruntimeconfig.cache
 D:\Github\PkxFiles\obj\Debug\net8.0-windows\ref\PkxFiles.dll
+D:\Github\PkxFiles\obj\Debug\net8.0-windows\PkxFiles.sourcelink.json
