@@ -7,7 +7,6 @@ namespace PokeViewer
 {
     public class FileMetadata
     {
-        public string FileName { get; set; } = "";
         public List<string> Tags { get; set; } = new();
         public string Comment { get; set; } = "";
     }
@@ -18,9 +17,9 @@ namespace PokeViewer
 
         public static string MetadataFileName => ".pokeviewer.meta.json";
 
-        public static MetadataStore Load(string folderPath)
+        public static MetadataStore Load(string rootFolderPath)
         {
-            string metaPath = Path.Combine(folderPath, MetadataFileName);
+            string metaPath = Path.Combine(rootFolderPath, MetadataFileName);
             if (!File.Exists(metaPath))
                 return new MetadataStore();
 
@@ -28,27 +27,32 @@ namespace PokeViewer
             return JsonSerializer.Deserialize<MetadataStore>(json) ?? new MetadataStore();
         }
 
-        public void Save(string folderPath)
+        public void Save(string rootFolderPath)
         {
-            string metaPath = Path.Combine(folderPath, MetadataFileName);
+            string metaPath = Path.Combine(rootFolderPath, MetadataFileName);
             var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(metaPath, json);
         }
 
-        public FileMetadata GetOrCreate(string fileName)
+        public FileMetadata GetOrCreate(string relativePath)
         {
-            if (!Entries.TryGetValue(fileName, out var meta))
+            if (!Entries.TryGetValue(relativePath, out var meta))
             {
-                meta = new FileMetadata { FileName = fileName };
-                Entries[fileName] = meta;
+                meta = new FileMetadata();
+                Entries[relativePath] = meta;
             }
             return meta;
         }
 
-        public void Delete(string fileName)
+        public void Delete(string relativePath)
         {
-            if (Entries.ContainsKey(fileName))
-                Entries.Remove(fileName);
+            if (Entries.ContainsKey(relativePath))
+                Entries.Remove(relativePath);
+        }
+
+        public List<string> GetAllKeys()
+        {
+            return Entries.Keys.ToList();
         }
     }
 }
