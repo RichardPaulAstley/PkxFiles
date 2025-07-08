@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Drawing;
+using PKHeX.Core;
 
 namespace PokeViewer
 {
@@ -23,6 +24,16 @@ namespace PokeViewer
         private MetadataStore store = new();
         private string currentFolder = "";
         private List<string> filteredIds = new();
+        private string nameFilter = "";
+        private string tagFilter = "";
+        private string commentFilter = "";
+        private TextBox tagFilterBox = new();
+        private Button tagFilterButton = new();
+        private TextBox commentFilterBox = new();
+        private Button commentFilterButton = new();
+        private Button saveCommentButton = new();
+        private Button saveTagButton = new();
+        private Button openFolderButton = new();
 
         private static readonly string[] PokemonExtensions = new[]
         {
@@ -46,36 +57,87 @@ namespace PokeViewer
             fileTreeView.Width = 300;
             fileTreeView.AfterSelect += FileTreeView_AfterSelect;
 
-            tagComboBox.Top = 40;
-            tagComboBox.Left = 320;
-            tagComboBox.Width = 650;
-            tagComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            // tagComboBox.SelectedIndexChanged += TagComboBox_SelectedIndexChanged;
-            
+            // Recherche par nom de Pokémon (français)
+            nameSearchBox.Top = 10;
+            nameSearchBox.Left = 320;
+            nameSearchBox.Width = 250;
+            nameSearchBox.PlaceholderText = "Nom du Pokémon (français)";
+            nameSearchButton.Text = "🔍";
+            nameSearchButton.Top = 10;
+            nameSearchButton.Left = 580;
+            nameSearchButton.Width = 40;
+            nameSearchButton.Height = nameSearchBox.Height;
+            nameSearchButton.Click += NameSearchButton_Click;
 
-            commentBox.Top = 70;
+            // Zone commentaire (doublée)
+            commentBox.Top = 50;
             commentBox.Left = 320;
-            commentBox.Width = 650;
-            commentBox.Height = 60;
+            commentBox.Width = 400;
+            commentBox.Height = 80;
             commentBox.Multiline = true;
             commentBox.PlaceholderText = "Commentaire";
+            saveCommentButton.Text = "💾";
+            saveCommentButton.Top = 50;
+            saveCommentButton.Left = 730;
+            saveCommentButton.Width = 40;
+            saveCommentButton.Height = commentBox.Height;
+            saveCommentButton.Click += SaveCommentButton_Click;
 
-            saveButton.Text = "💾 Sauvegarder";
-            saveButton.Left = 320;
-            saveButton.Top = 140;
-            saveButton.Click += SaveButton_Click;
+            // Zone tags
+            tagBox.Top = 140;
+            tagBox.Left = 320;
+            tagBox.Width = 400;
+            tagBox.PlaceholderText = "Tags (séparés par virgule)";
+            saveTagButton.Text = "💾";
+            saveTagButton.Top = 140;
+            saveTagButton.Left = 730;
+            saveTagButton.Width = 40;
+            saveTagButton.Height = tagBox.Height;
+            saveTagButton.Click += SaveTagButton_Click;
 
-            searchBox.Top = 150;
-            searchBox.Left = 320;
-            searchBox.Width = 650;
-            searchBox.PlaceholderText = "Rechercher par tag ou commentaire...";
-            searchBox.TextChanged += SearchBox_TextChanged;
+            // Bouton ouvrir dossier Pokémon
+            openFolderButton.Text = "📁";
+            openFolderButton.Top = 140;
+            openFolderButton.Left = 780;
+            openFolderButton.Width = 40;
+            openFolderButton.Height = tagBox.Height;
+            openFolderButton.Click += OpenFolderButton_Click;
+            Controls.Add(openFolderButton);
+
+            // Filtres tag/commentaire côte à côte
+            tagFilterBox.Top = 180;
+            tagFilterBox.Left = 320;
+            tagFilterBox.Width = 200;
+            tagFilterBox.PlaceholderText = "Filtrer par tag";
+            tagFilterButton.Text = "🔍";
+            tagFilterButton.Top = 180;
+            tagFilterButton.Left = 525;
+            tagFilterButton.Width = 40;
+            tagFilterButton.Height = tagFilterBox.Height;
+            tagFilterButton.Click += TagFilterButton_Click;
+
+            commentFilterBox.Top = 180;
+            commentFilterBox.Left = 580;
+            commentFilterBox.Width = 200;
+            commentFilterBox.PlaceholderText = "Filtrer par commentaire";
+            commentFilterButton.Text = "🔍";
+            commentFilterButton.Top = 180;
+            commentFilterButton.Left = 785;
+            commentFilterButton.Width = 40;
+            commentFilterButton.Height = commentFilterBox.Height;
+            commentFilterButton.Click += CommentFilterButton_Click;
 
             Controls.Add(fileTreeView);
-            Controls.Add(tagBox);
+            Controls.Add(nameSearchBox);
+            Controls.Add(nameSearchButton);
             Controls.Add(commentBox);
-            Controls.Add(saveButton);
-            Controls.Add(searchBox);
+            Controls.Add(saveCommentButton);
+            Controls.Add(tagBox);
+            Controls.Add(saveTagButton);
+            Controls.Add(tagFilterBox);
+            Controls.Add(tagFilterButton);
+            Controls.Add(commentFilterBox);
+            Controls.Add(commentFilterButton);
 
             Load += (_, _) => OnStartupScan();
         }
@@ -119,16 +181,51 @@ namespace PokeViewer
             var removedIds = knownIds.Except(foundIds).ToList();
             var conflictIds = duplicateIds.ToList();
 
-            // Si au moins un cas, afficher le pop-up
-            if (newIds.Count > 0 || removedIds.Count > 0 || conflictIds.Count > 0)
+            // Détection d'évolution
+            var baseIdToSpecies = new Dictionary<string, string>();
+            foreach (var id in knownIds)
             {
-                using (var popup = new StartupPopup(newIds, removedIds, conflictIds, allBoxMons, store))
+                var baseId = GetBaseId(id);
+                var species = GetSpeciesFromId(id);
+                if (!string.IsNullOrEmpty(baseId) && !string.IsNullOrEmpty(species))
+                    baseIdToSpecies[baseId] = species;
+            }
+            var evolutionIds = new List<string>();
+            foreach (var id in newIds.ToList())
+            {
+                var baseId = GetBaseId(id);
+                var species = GetSpeciesFromId(id);
+                if (!string.IsNullOrEmpty(baseId) && !string.IsNullOrEmpty(species)
+                    && baseIdToSpecies.TryGetValue(baseId, out var oldSpecies)
+                    && oldSpecies != species)
+                {
+                    evolutionIds.Add(id);
+                    newIds.Remove(id); // On ne le compte plus comme simple ajout
+                }
+            }
+
+            // Pour chaque suppression, ajouter le tag 'disparu' automatiquement
+            foreach (var id in removedIds)
+            {
+                var meta = store.GetOrCreate(id);
+                if (!meta.Tags.Contains("disparu"))
+                {
+                    meta.Tags.Add("disparu");
+                }
+            }
+            if (removedIds.Count > 0)
+                store.Save(currentFolder);
+
+            // Si au moins un ajout, évolution ou conflit, afficher le pop-up
+            if (newIds.Count > 0 || conflictIds.Count > 0 || evolutionIds.Count > 0)
+            {
+                using (var popup = new StartupPopup(newIds, evolutionIds, conflictIds, removedIds, allBoxMons, store))
                 {
                     if (popup.ShowDialog() == DialogResult.OK)
                     {
                         filteredIds = popup.GetFilteredIds();
                         // Marquer les nouveaux IDs comme connus dans le store
-                        foreach (var id in newIds)
+                        foreach (var id in newIds.Concat(evolutionIds))
                         {
                             if (!store.GetAllKeys().Contains(id))
                                 store.GetOrCreate(id); // Crée une entrée vide
@@ -142,6 +239,55 @@ namespace PokeViewer
                 filteredIds.Clear();
             }
             RefreshFileTree();
+
+            // Création de l'arborescence "Pokemon Data"
+            try
+            {
+                string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+                string dataRoot = Path.Combine(exeDir, "Pokemon Data");
+                if (!Directory.Exists(dataRoot))
+                    Directory.CreateDirectory(dataRoot);
+                // Génération pour les saves
+                foreach (var savePath in Directory.GetFiles(currentFolder, "*", SearchOption.AllDirectories)
+                    .Where(f => SaveExtensions.Contains(Path.GetExtension(f).ToLower()) || Path.GetFileName(f).ToLower() == "main"))
+                {
+                    var relSavePath = Path.GetRelativePath(currentFolder, savePath);
+                    var saveDir = Path.Combine(dataRoot, Path.GetDirectoryName(relSavePath) ?? "");
+                    if (!Directory.Exists(saveDir))
+                        Directory.CreateDirectory(saveDir);
+                    var saveName = Path.GetFileNameWithoutExtension(savePath);
+                    var saveRoot = Path.Combine(saveDir, saveName);
+                    if (!Directory.Exists(saveRoot))
+                        Directory.CreateDirectory(saveRoot);
+                    var mons = PkxFilesSaveUtil.LoadBoxPokemons(savePath);
+                    var boxGroups = mons.GroupBy(x => x.Box);
+                    foreach (var box in boxGroups)
+                    {
+                        string boxDir;
+                        if (box.Key == -1)
+                        {
+                            boxDir = Path.Combine(saveRoot, "Équipe");
+                        }
+                        else
+                        {
+                            boxDir = Path.Combine(saveRoot, $"Boîte {box.Key + 1}");
+                        }
+                        if (!Directory.Exists(boxDir))
+                            Directory.CreateDirectory(boxDir);
+                        foreach (var mon in box)
+                        {
+                            var monDir = Path.Combine(boxDir, mon.UniqueID);
+                            if (!Directory.Exists(monDir))
+                                Directory.CreateDirectory(monDir);
+                        }
+                    }
+                }
+                // (Suppression de la génération pour les fichiers Pokémon individuels)
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Erreur lors de la création de l'arborescence Pokemon Data : {ex.Message}");
+            }
         }
 
         private void RefreshFileTree()
@@ -161,10 +307,12 @@ namespace PokeViewer
             foreach (var file in dir.GetFiles())
             {
                 if (PokemonExtensions.Contains(file.Extension.ToLower()))
+                {
                     node.Nodes.Add(new TreeNode(file.Name) { Tag = file.FullName });
+                }
                 else if (SaveExtensions.Contains(file.Extension.ToLower()) || file.Name.ToLower() == "main")
                 {
-                    var saveNode = new TreeNode("[SAVE] " + file.Name) { Tag = file.FullName };
+                    var saveNode = new TreeNode(Path.GetFileNameWithoutExtension(file.Name)) { Tag = file.FullName };
                     try
                     {
                         var boxMons = PkxFilesSaveUtil.LoadBoxPokemons(file.FullName);
@@ -176,6 +324,27 @@ namespace PokeViewer
                             {
                                 if (filteredIds.Count > 0 && !filteredIds.Contains(mon.UniqueID))
                                     continue;
+                                // Filtrage par nom (français)
+                                if (!string.IsNullOrEmpty(nameFilter))
+                                {
+                                    var frName = GetFrenchName(mon.Pkm?.Species ?? 0);
+                                    if (!frName.Contains(nameFilter, StringComparison.OrdinalIgnoreCase))
+                                        continue;
+                                }
+                                // Filtrage par tag
+                                if (!string.IsNullOrEmpty(tagFilter))
+                                {
+                                    var meta = store.GetOrCreate(mon.UniqueID);
+                                    if (!meta.Tags.Any(t => t.ToLower().Contains(tagFilter)))
+                                        continue;
+                                }
+                                // Filtrage par commentaire
+                                if (!string.IsNullOrEmpty(commentFilter))
+                                {
+                                    var meta = store.GetOrCreate(mon.UniqueID);
+                                    if (!meta.Comment.ToLower().Contains(commentFilter))
+                                        continue;
+                                }
                                 var monName = mon.Pkm?.Nickname ?? "?";
                                 boxNode.Nodes.Add(new TreeNode($"{monName} (Slot {mon.Slot + 1})") { Tag = mon });
                             }
@@ -300,6 +469,143 @@ namespace PokeViewer
                 }
             }
             return hasMatch ? node : null;
+        }
+
+        private void NameSearchButton_Click(object? sender, EventArgs e)
+        {
+            nameFilter = nameSearchBox.Text.Trim();
+            RefreshFileTree();
+        }
+        private void TagFilterButton_Click(object? sender, EventArgs e)
+        {
+            tagFilter = tagFilterBox.Text.Trim().ToLower();
+            RefreshFileTree();
+        }
+        private void CommentFilterButton_Click(object? sender, EventArgs e)
+        {
+            commentFilter = commentFilterBox.Text.Trim().ToLower();
+            RefreshFileTree();
+        }
+        private void SaveCommentButton_Click(object? sender, EventArgs e)
+        {
+            if (fileTreeView.SelectedNode == null || fileTreeView.SelectedNode.Tag == null)
+                return;
+            if (fileTreeView.SelectedNode.Tag is PkxFilesSaveUtil.BoxPokemonInfo boxMon)
+            {
+                var meta = store.GetOrCreate(boxMon.UniqueID);
+                meta.Comment = commentBox.Text;
+                store.Save(currentFolder);
+            }
+            else if (fileTreeView.SelectedNode.Tag is string filePath)
+            {
+                var fileName = Path.GetFileName(filePath);
+                var meta = store.GetOrCreate(fileName);
+                meta.Comment = commentBox.Text;
+                store.Save(currentFolder);
+            }
+        }
+        private void SaveTagButton_Click(object? sender, EventArgs e)
+        {
+            if (fileTreeView.SelectedNode == null || fileTreeView.SelectedNode.Tag == null)
+                return;
+            if (fileTreeView.SelectedNode.Tag is PkxFilesSaveUtil.BoxPokemonInfo boxMon)
+            {
+                var meta = store.GetOrCreate(boxMon.UniqueID);
+                meta.Tags = tagBox.Text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+                store.Save(currentFolder);
+            }
+            else if (fileTreeView.SelectedNode.Tag is string filePath)
+            {
+                var fileName = Path.GetFileName(filePath);
+                var meta = store.GetOrCreate(fileName);
+                meta.Tags = tagBox.Text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+                store.Save(currentFolder);
+            }
+        }
+
+        private void OpenFolderButton_Click(object? sender, EventArgs e)
+        {
+            if (fileTreeView.SelectedNode == null || fileTreeView.SelectedNode.Tag == null)
+                return;
+            string? id = null;
+            if (fileTreeView.SelectedNode.Tag is PkxFilesSaveUtil.BoxPokemonInfo boxMon)
+                id = boxMon.UniqueID;
+            else if (fileTreeView.SelectedNode.Tag is string filePath)
+                id = Path.GetFileName(filePath);
+            if (string.IsNullOrEmpty(id)) return;
+            // Retrouver le chemin du dossier Pokémon Data
+            string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+            string dataRoot = Path.Combine(exeDir, "Pokemon Data");
+            // Retrouver le chemin relatif dans l'arborescence
+            TreeNode? node = fileTreeView.SelectedNode;
+            var pathParts = new List<string>();
+            bool boxAdded = false;
+            while (node != null && node.Parent != null)
+            {
+                if (node.Text.StartsWith("Boîte ") && !boxAdded)
+                {
+                    pathParts.Insert(0, node.Text);
+                    boxAdded = true;
+                }
+                else if (!(node.Text.StartsWith("Boîte ") && boxAdded))
+                {
+                    if (node.Tag is PkxFilesSaveUtil.BoxPokemonInfo)
+                    {
+                        // Pour la save, on retire l'extension
+                        if (node.Parent.Tag is string savePath)
+                        {
+                            var saveName = node.Parent.Text;
+                            var saveNameNoExt = Path.GetFileNameWithoutExtension(saveName);
+                            pathParts.Insert(0, saveNameNoExt);
+                            node = node.Parent.Parent;
+                            continue;
+                        }
+                    }
+                    else if (node.Tag is string)
+                    {
+                        var saveName = node.Text;
+                        var saveNameNoExt = Path.GetFileNameWithoutExtension(saveName);
+                        pathParts.Insert(0, saveNameNoExt);
+                    }
+                    else
+                        pathParts.Insert(0, node.Text);
+                }
+                node = node.Parent;
+            }
+            // On cherche le dossier qui contient l'ID
+            string monDir = Path.Combine(dataRoot, Path.Combine(pathParts.ToArray()), id);
+            if (Directory.Exists(monDir))
+                System.Diagnostics.Process.Start("explorer.exe", monDir);
+            else
+                MessageBox.Show($"Dossier non trouvé : {monDir}");
+        }
+
+        // Utilitaire pour obtenir le nom français d'une espèce
+        private string GetFrenchName(int species)
+        {
+            try
+            {
+                var speciesList = GameInfo.Strings.Species;
+                if (species >= 0 && species < speciesList.Count)
+                    return speciesList[species] ?? "";
+                return "";
+            }
+            catch { return ""; }
+        }
+
+        // Utilitaires pour extraire la base d'ID et l'espèce
+        private string GetBaseId(string id)
+        {
+            var dash = id.IndexOf('-');
+            if (dash < 0 || dash + 1 >= id.Length) return "";
+            var basePart = id.Substring(dash + 1); // IV32_TID16_SID16_OT
+            return basePart;
+        }
+        private string GetSpeciesFromId(string id)
+        {
+            var dash = id.IndexOf('-');
+            if (dash < 0) return "";
+            return id.Substring(0, dash); // 4 chiffres
         }
     }
 }

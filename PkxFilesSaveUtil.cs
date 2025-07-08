@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using PKHeX.Core;
+using System.Linq; // Added for .Where() and .FirstOrDefault()
 
 namespace PokeViewer
 {
@@ -24,6 +25,7 @@ namespace PokeViewer
             if (sav == null)
                 throw new Exception("Sauvegarde non reconnue ou non supportée par PKHeX.Core");
 
+            // Lecture des boîtes
             for (int box = 0; box < sav.BoxCount; box++)
             {
                 var boxData = sav.GetBoxData(box);
@@ -43,13 +45,43 @@ namespace PokeViewer
                     });
                 }
             }
+            // Lecture de l'équipe (party)
+            // Recherche d'une propriété de type PKM[] qui contient l'équipe
+            var partyData = sav.GetType()
+                .GetProperties()
+                .Where(p => p.PropertyType == typeof(PKHeX.Core.PKM[]))
+                .Select(p => p.GetValue(sav) as PKHeX.Core.PKM[])
+                .FirstOrDefault(arr => arr != null && arr.Length > 0 && arr.Any(pkm => pkm != null && pkm.Species > 0));
+
+            if (partyData != null)
+            {
+                for (int slot = 0; slot < partyData.Length; slot++)
+                {
+                    var pkm = partyData[slot];
+                    if (pkm == null || pkm.Species == 0)
+                        continue;
+                    string uniqueId = GenerateUniqueId(pkm, -1, slot);
+                    result.Add(new BoxPokemonInfo
+                    {
+                        Box = -1,
+                        Slot = slot,
+                        UniqueID = uniqueId,
+                        Pkm = pkm,
+                        SaveFileName = Path.GetFileName(savePath)
+                    });
+                }
+            }
             return result;
         }
 
         public static string GenerateUniqueId(PKM pkm, int box, int slot)
         {
+            // Espèce sur 4 chiffres
+            string species = pkm.Species.ToString("D4");
             // PID
             string pid = pkm.PID.ToString();
+            // IVs (IV32)
+            string ivs = string.Join("", pkm.IVs);
             // TID
             string tid = pkm.TID16.ToString();
             // SID
@@ -58,12 +90,8 @@ namespace PokeViewer
             string ot = "";
             foreach (char c in pkm.OriginalTrainerName)
                 ot += ((int)c).ToString();
-            // IVs (IV32)
-            string ivs = string.Join("", pkm.IVs);
-            // Box et Slot
-            string boxStr = box.ToString();
-            string slotStr = slot.ToString();
-            return $"{pid}{tid}{sid}{ot}{boxStr}{slotStr}{ivs}";
+            // Format final
+            return $"{species}-{pid}_{ivs}_{tid}_{sid}_{ot}";
         }
     }
 } 
