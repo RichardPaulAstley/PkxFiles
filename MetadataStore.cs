@@ -7,6 +7,7 @@ namespace PokeViewer
 {
     public class FileMetadata
     {
+        public string FileName { get; set; } = "";
         public List<string> Tags { get; set; } = new();
         public string Comment { get; set; } = "";
     }
@@ -17,9 +18,9 @@ namespace PokeViewer
 
         public static string MetadataFileName => ".pokeviewer.meta.json";
 
-        public static MetadataStore Load(string rootFolderPath)
+        public static MetadataStore Load(string folderPath)
         {
-            string metaPath = Path.Combine(rootFolderPath, MetadataFileName);
+            string metaPath = Path.Combine(folderPath, MetadataFileName);
             if (!File.Exists(metaPath))
                 return new MetadataStore();
 
@@ -27,27 +28,27 @@ namespace PokeViewer
             return JsonSerializer.Deserialize<MetadataStore>(json) ?? new MetadataStore();
         }
 
-        public void Save(string rootFolderPath)
+        public void Save(string folderPath)
         {
-            string metaPath = Path.Combine(rootFolderPath, MetadataFileName);
+            string metaPath = Path.Combine(folderPath, MetadataFileName);
             var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(metaPath, json);
         }
 
-        public FileMetadata GetOrCreate(string relativePath)
+        public FileMetadata GetOrCreate(string fileName)
         {
-            if (!Entries.TryGetValue(relativePath, out var meta))
+            if (!Entries.TryGetValue(fileName, out var meta))
             {
-                meta = new FileMetadata();
-                Entries[relativePath] = meta;
+                meta = new FileMetadata { FileName = fileName };
+                Entries[fileName] = meta;
             }
             return meta;
         }
 
-        public void Delete(string relativePath)
+        public void Delete(string fileName)
         {
-            if (Entries.ContainsKey(relativePath))
-                Entries.Remove(relativePath);
+            if (Entries.ContainsKey(fileName))
+                Entries.Remove(fileName);
         }
     }
 }

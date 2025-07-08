@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PkxFiles")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+18ae3f25eb050197a34fb7f3434ebfdb450e4284")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6932fdef5f3a30441a885826196f1e81ee262907")]
 [assembly: System.Reflection.AssemblyProductAttribute("PkxFiles")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PkxFiles")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
