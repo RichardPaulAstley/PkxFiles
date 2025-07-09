@@ -213,15 +213,12 @@ namespace PokeViewer
             {
                 if (kv.Value.Count > 1)
                 {
-                    // On regarde combien de clones suffixés existent déjà dans le store
                     var id = kv.Key;
-                    int nbExistants = 0;
-                    while (store.GetAllKeys().Contains(id + (nbExistants == 0 ? "" : $"_({nbExistants + 1})")))
-                        nbExistants++;
-                    // On ne propose que les nouveaux clones non suffixés
+                    // Chercher tous les IDs existants du type ID, ID_(2), ID_(3), etc.
+                    var existingIds = new HashSet<string>(store.GetAllKeys().Where(x => x == id || System.Text.RegularExpressions.Regex.IsMatch(x, $"^{System.Text.RegularExpressions.Regex.Escape(id)}_\\([0-9]+\\)$")));
+                    int nbExistants = existingIds.Count;
                     if (kv.Value.Count > nbExistants)
                     {
-                        // On garde seulement les nouveaux à traiter
                         var nouveaux = kv.Value.Skip(nbExistants).ToList();
                         cloneGroups[id] = nouveaux;
                     }

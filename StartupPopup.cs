@@ -147,33 +147,39 @@ namespace PokeViewer
             {
                 var id = kv.Key;
                 var clones = kv.Value;
-                int idx = 1;
+                // Récupérer tous les index déjà utilisés pour ce groupe
+                var existingIds = new HashSet<string>(store.GetAllKeys().Where(x => x == id || System.Text.RegularExpressions.Regex.IsMatch(x, $"^{System.Text.RegularExpressions.Regex.Escape(id)}_\\([0-9]+\\)$")));
+                var usedIndexes = new HashSet<int>();
+                foreach (var eid in existingIds)
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(eid, $"^{System.Text.RegularExpressions.Regex.Escape(id)}_\\((\\d+)\\)$");
+                    if (match.Success && int.TryParse(match.Groups[1].Value, out int idx))
+                        usedIndexes.Add(idx);
+                }
+                int nextIdx = 2;
                 bool auMoinsUnCoche = false;
+                int cloneIdx = 1;
                 foreach (var mon in clones)
                 {
-                    var key = $"{id}__clone{idx}";
+                    var key = $"{id}__clone{cloneIdx}";
                     if (evolutionCheckboxes.TryGetValue(key, out var cb) && cb.Checked)
                     {
                         auMoinsUnCoche = true;
+                        // Trouver le plus petit index libre
+                        while (usedIndexes.Contains(nextIdx))
+                            nextIdx++;
+                        string idIncremente = id + $"_({nextIdx})";
                         string exeDir = AppDomain.CurrentDomain.BaseDirectory;
                         string dataRoot = Path.Combine(exeDir, "Pokemon Data");
-                        string baseDir = Path.Combine(dataRoot, id);
-                        string finalDir = baseDir;
-                        string idIncremente = id;
-                        if (idx > 1)
-                        {
-                            int n = idx;
-                            finalDir = baseDir + $"_({n})";
-                            idIncremente = id + $"_({n})";
-                        }
+                        string finalDir = Path.Combine(dataRoot, idIncremente);
                         if (!Directory.Exists(finalDir))
                             Directory.CreateDirectory(finalDir);
-                        // Ajout dans le store pour l'ID incrémenté
                         store.GetOrCreate(idIncremente);
+                        usedIndexes.Add(nextIdx);
+                        nextIdx++;
                     }
-                    idx++;
+                    cloneIdx++;
                 }
-                // Si aucun clone n'est coché, on ne crée qu'une seule entrée ID_(cloned) (pour le premier du groupe)
                 if (!auMoinsUnCoche && clones.Count > 0)
                 {
                     string idCloned = id + "_(cloned)";
