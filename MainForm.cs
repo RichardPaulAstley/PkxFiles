@@ -559,6 +559,16 @@ namespace PokeViewer
             string exeDir = AppDomain.CurrentDomain.BaseDirectory;
             string dataRoot = Path.Combine(exeDir, "Pokemon Data");
             string monDir = Path.Combine(dataRoot, id);
+
+            // Chercher un tag du type (n) pour ouvrir le bon dossier incrémenté
+            var meta = store.GetOrCreate(id);
+            var incrTag = meta.Tags.FirstOrDefault(t => System.Text.RegularExpressions.Regex.IsMatch(t, @"^\([0-9]+\)$"));
+            if (!string.IsNullOrEmpty(incrTag))
+            {
+                // Ajoute le suffixe _n à la racine du dossier
+                var n = incrTag.Trim('(', ')');
+                monDir = Path.Combine(dataRoot, id + $"_({n})");
+            }
             if (Directory.Exists(monDir))
                 System.Diagnostics.Process.Start("explorer.exe", monDir);
             else
