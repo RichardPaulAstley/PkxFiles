@@ -173,6 +173,15 @@ namespace PokeViewer
                 }
                 catch { }
             }
+            // On ignore les IDs de base si un ID_(cloned) existe déjà dans le store, mais uniquement pour CE UniqueID
+            var idsCloned = new HashSet<string>(store.GetAllKeys().Where(x => x.EndsWith("_(cloned)")));
+            foreach (var idCloned in idsCloned)
+            {
+                var baseId = idCloned.Substring(0, idCloned.Length - "_(cloned)".Length);
+                if (idToClones.ContainsKey(baseId))
+                    idToClones.Remove(baseId);
+                foundIds.Remove(baseId);
+            }
             var knownIds = store.GetAllKeys();
             var newIds = foundIds.Except(knownIds).ToList();
             var removedIds = knownIds.Except(foundIds).ToList();
@@ -199,18 +208,28 @@ namespace PokeViewer
                 }
             }
             // Préparer la liste des clones (groupes d'ID avec plusieurs entrées)
-            var cloneGroups = idToClones.Where(kv => kv.Value.Count > 1).ToDictionary(kv => kv.Key, kv => kv.Value);
-            // Pour chaque suppression, ajouter le tag 'disparu' automatiquement
-            foreach (var id in removedIds)
+            var cloneGroups = new Dictionary<string, List<PkxFilesSaveUtil.BoxPokemonInfo>>();
+            foreach (var kv in idToClones)
             {
-                var meta = store.GetOrCreate(id);
-                if (!meta.Tags.Contains("disparu"))
+                if (kv.Value.Count > 1)
                 {
-                    meta.Tags.Add("disparu");
+                    // On regarde combien de clones suffixés existent déjà dans le store
+                    var id = kv.Key;
+                    int nbExistants = 0;
+                    while (store.GetAllKeys().Contains(id + (nbExistants == 0 ? "" : $"_({nbExistants + 1})")))
+                        nbExistants++;
+                    // On ne propose que les nouveaux clones non suffixés
+                    if (kv.Value.Count > nbExistants)
+                    {
+                        // On garde seulement les nouveaux à traiter
+                        var nouveaux = kv.Value.Skip(nbExistants).ToList();
+                        cloneGroups[id] = nouveaux;
+                    }
                 }
             }
-            if (removedIds.Count > 0)
-                store.Save(currentFolder);
+            // Pour chaque suppression, ne rien faire (on ne tag plus 'disparu')
+            // if (removedIds.Count > 0)
+            //     store.Save(currentFolder);
             // Si au moins un ajout, évolution ou clone, afficher le pop-up
             if (newIds.Count > 0 || evolutionIds.Count > 0 || cloneGroups.Count > 0)
             {

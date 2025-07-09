@@ -148,24 +148,36 @@ namespace PokeViewer
                 var id = kv.Key;
                 var clones = kv.Value;
                 int idx = 1;
+                bool auMoinsUnCoche = false;
                 foreach (var mon in clones)
                 {
                     var key = $"{id}__clone{idx}";
                     if (evolutionCheckboxes.TryGetValue(key, out var cb) && cb.Checked)
                     {
+                        auMoinsUnCoche = true;
                         string exeDir = AppDomain.CurrentDomain.BaseDirectory;
                         string dataRoot = Path.Combine(exeDir, "Pokemon Data");
                         string baseDir = Path.Combine(dataRoot, id);
                         string finalDir = baseDir;
+                        string idIncremente = id;
                         if (idx > 1)
                         {
                             int n = idx;
                             finalDir = baseDir + $"_({n})";
+                            idIncremente = id + $"_({n})";
                         }
                         if (!Directory.Exists(finalDir))
                             Directory.CreateDirectory(finalDir);
+                        // Ajout dans le store pour l'ID incrémenté
+                        store.GetOrCreate(idIncremente);
                     }
                     idx++;
+                }
+                // Si aucun clone n'est coché, on ne crée qu'une seule entrée ID_(cloned) (pour le premier du groupe)
+                if (!auMoinsUnCoche && clones.Count > 0)
+                {
+                    string idCloned = id + "_(cloned)";
+                    store.GetOrCreate(idCloned);
                 }
             }
             // On ajoute seulement les évolutions confirmées
@@ -214,6 +226,9 @@ namespace PokeViewer
                     }
                 }
             }
+            // Sauvegarde du store après ajout des clones et évolutions
+            // La sauvegarde doit être faite dans le dossier ouvert par l'utilisateur (currentFolder), donc ici on ne fait rien :
+            // La sauvegarde sera faite par MainForm après GetFilteredIds()
             return filteredIds.Concat(confirmedEvos).Distinct().ToList();
         }
 
