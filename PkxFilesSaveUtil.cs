@@ -45,14 +45,22 @@ namespace PokeViewer
                     });
                 }
             }
-            // Lecture de l'équipe (party)
-            // Recherche d'une propriété de type PKM[] qui contient l'équipe
-            var partyData = sav.GetType()
-                .GetProperties()
-                .Where(p => p.PropertyType == typeof(PKHeX.Core.PKM[]))
-                .Select(p => p.GetValue(sav) as PKHeX.Core.PKM[])
-                .FirstOrDefault(arr => arr != null && arr.Length > 0 && arr.Any(pkm => pkm != null && pkm.Species > 0));
-
+            // Lecture de l'équipe (party) : cibler explicitement les propriétés les plus courantes
+            PKHeX.Core.PKM[]? partyData = null;
+            var partyPropNames = new[] { "Party", "CurrentParty", "PartyData" };
+            foreach (var propName in partyPropNames)
+            {
+                var prop = sav.GetType().GetProperty(propName);
+                if (prop != null)
+                {
+                    var val = prop.GetValue(sav) as PKHeX.Core.PKM[];
+                    if (val != null && val.Length > 0 && val.Any(pkm => pkm != null && pkm.Species > 0))
+                    {
+                        partyData = val;
+                        break;
+                    }
+                }
+            }
             if (partyData != null)
             {
                 for (int slot = 0; slot < partyData.Length; slot++)

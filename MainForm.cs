@@ -153,8 +153,8 @@ namespace PokeViewer
 
             // Scan toutes les saves pour détecter ajouts, conflits, suppressions
             var allBoxMons = new Dictionary<string, PkxFilesSaveUtil.BoxPokemonInfo>();
-            var duplicateIds = new HashSet<string>();
             var foundIds = new HashSet<string>();
+            var idToClones = new Dictionary<string, List<PkxFilesSaveUtil.BoxPokemonInfo>>();
             foreach (var savePath in Directory.GetFiles(currentFolder, "*", SearchOption.AllDirectories)
                 .Where(f => SaveExtensions.Contains(Path.GetExtension(f).ToLower()) || Path.GetFileName(f).ToLower() == "main"))
             {
@@ -163,14 +163,11 @@ namespace PokeViewer
                     var mons = PkxFilesSaveUtil.LoadBoxPokemons(savePath);
                     foreach (var mon in mons)
                     {
-                        if (allBoxMons.ContainsKey(mon.UniqueID))
-                        {
-                            duplicateIds.Add(mon.UniqueID);
-                        }
-                        else
-                        {
+                        if (!idToClones.ContainsKey(mon.UniqueID))
+                            idToClones[mon.UniqueID] = new List<PkxFilesSaveUtil.BoxPokemonInfo>();
+                        idToClones[mon.UniqueID].Add(mon);
+                        if (!allBoxMons.ContainsKey(mon.UniqueID))
                             allBoxMons[mon.UniqueID] = mon;
-                        }
                         foundIds.Add(mon.UniqueID);
                     }
                 }
@@ -179,9 +176,7 @@ namespace PokeViewer
             var knownIds = store.GetAllKeys();
             var newIds = foundIds.Except(knownIds).ToList();
             var removedIds = knownIds.Except(foundIds).ToList();
-            var conflictIds = duplicateIds.ToList();
-
-            // Détection d'évolution
+            // Détection d'évolution (inchangé)
             var baseIdToSpecies = new Dictionary<string, string>();
             foreach (var id in knownIds)
             {
@@ -203,7 +198,8 @@ namespace PokeViewer
                     newIds.Remove(id); // On ne le compte plus comme simple ajout
                 }
             }
-
+            // Préparer la liste des clones (groupes d'ID avec plusieurs entrées)
+            var cloneGroups = idToClones.Where(kv => kv.Value.Count > 1).ToDictionary(kv => kv.Key, kv => kv.Value);
             // Pour chaque suppression, ajouter le tag 'disparu' automatiquement
             foreach (var id in removedIds)
             {
@@ -215,20 +211,18 @@ namespace PokeViewer
             }
             if (removedIds.Count > 0)
                 store.Save(currentFolder);
-
-            // Si au moins un ajout, évolution ou conflit, afficher le pop-up
-            if (newIds.Count > 0 || conflictIds.Count > 0 || evolutionIds.Count > 0)
+            // Si au moins un ajout, évolution ou clone, afficher le pop-up
+            if (newIds.Count > 0 || evolutionIds.Count > 0 || cloneGroups.Count > 0)
             {
-                using (var popup = new StartupPopup(newIds, evolutionIds, conflictIds, removedIds, allBoxMons, store))
+                using (var popup = new StartupPopup(newIds, evolutionIds, removedIds, cloneGroups, allBoxMons, store))
                 {
                     if (popup.ShowDialog() == DialogResult.OK)
                     {
                         filteredIds = popup.GetFilteredIds();
-                        // Marquer les nouveaux IDs comme connus dans le store
                         foreach (var id in newIds.Concat(evolutionIds))
                         {
                             if (!store.GetAllKeys().Contains(id))
-                                store.GetOrCreate(id); // Crée une entrée vide
+                                store.GetOrCreate(id);
                         }
                         store.Save(currentFolder);
                     }
@@ -247,42 +241,17 @@ namespace PokeViewer
                 string dataRoot = Path.Combine(exeDir, "Pokemon Data");
                 if (!Directory.Exists(dataRoot))
                     Directory.CreateDirectory(dataRoot);
-                // Génération pour les saves
                 foreach (var savePath in Directory.GetFiles(currentFolder, "*", SearchOption.AllDirectories)
                     .Where(f => SaveExtensions.Contains(Path.GetExtension(f).ToLower()) || Path.GetFileName(f).ToLower() == "main"))
                 {
-                    var relSavePath = Path.GetRelativePath(currentFolder, savePath);
-                    var saveDir = Path.Combine(dataRoot, Path.GetDirectoryName(relSavePath) ?? "");
-                    if (!Directory.Exists(saveDir))
-                        Directory.CreateDirectory(saveDir);
-                    var saveName = Path.GetFileNameWithoutExtension(savePath);
-                    var saveRoot = Path.Combine(saveDir, saveName);
-                    if (!Directory.Exists(saveRoot))
-                        Directory.CreateDirectory(saveRoot);
                     var mons = PkxFilesSaveUtil.LoadBoxPokemons(savePath);
-                    var boxGroups = mons.GroupBy(x => x.Box);
-                    foreach (var box in boxGroups)
+                    foreach (var mon in mons)
                     {
-                        string boxDir;
-                        if (box.Key == -1)
-                        {
-                            boxDir = Path.Combine(saveRoot, "Équipe");
-                        }
-                        else
-                        {
-                            boxDir = Path.Combine(saveRoot, $"Boîte {box.Key + 1}");
-                        }
-                        if (!Directory.Exists(boxDir))
-                            Directory.CreateDirectory(boxDir);
-                        foreach (var mon in box)
-                        {
-                            var monDir = Path.Combine(boxDir, mon.UniqueID);
-                            if (!Directory.Exists(monDir))
-                                Directory.CreateDirectory(monDir);
-                        }
+                        var monDir = Path.Combine(dataRoot, mon.UniqueID);
+                        if (!Directory.Exists(monDir))
+                            Directory.CreateDirectory(monDir);
                     }
                 }
-                // (Suppression de la génération pour les fichiers Pokémon individuels)
             }
             catch (Exception ex)
             {
@@ -316,11 +285,13 @@ namespace PokeViewer
                     try
                     {
                         var boxMons = PkxFilesSaveUtil.LoadBoxPokemons(file.FullName);
-                        var boxGroups = boxMons.GroupBy(x => x.Box);
-                        foreach (var box in boxGroups)
+                        var boxGroups = boxMons.GroupBy(x => x.Box).ToList();
+                        // Afficher l'équipe en premier
+                        var partyGroup = boxGroups.FirstOrDefault(g => g.Key == -1);
+                        if (partyGroup != null)
                         {
-                            var boxNode = new TreeNode($"Boîte {box.Key + 1}");
-                            foreach (var mon in box)
+                            var partyNode = new TreeNode("Équipe");
+                            foreach (var mon in partyGroup)
                             {
                                 if (filteredIds.Count > 0 && !filteredIds.Contains(mon.UniqueID))
                                     continue;
@@ -339,6 +310,38 @@ namespace PokeViewer
                                         continue;
                                 }
                                 // Filtrage par commentaire
+                                if (!string.IsNullOrEmpty(commentFilter))
+                                {
+                                    var meta = store.GetOrCreate(mon.UniqueID);
+                                    if (!meta.Comment.ToLower().Contains(commentFilter))
+                                        continue;
+                                }
+                                var monName = mon.Pkm?.Nickname ?? "?";
+                                partyNode.Nodes.Add(new TreeNode($"{monName} (Slot {mon.Slot + 1})") { Tag = mon });
+                            }
+                            if (partyNode.Nodes.Count > 0)
+                                saveNode.Nodes.Add(partyNode);
+                        }
+                        // Puis les boîtes numérotées
+                        foreach (var box in boxGroups.Where(g => g.Key != -1).OrderBy(g => g.Key))
+                        {
+                            var boxNode = new TreeNode($"Boîte {box.Key + 1}");
+                            foreach (var mon in box)
+                            {
+                                if (filteredIds.Count > 0 && !filteredIds.Contains(mon.UniqueID))
+                                    continue;
+                                if (!string.IsNullOrEmpty(nameFilter))
+                                {
+                                    var frName = GetFrenchName(mon.Pkm?.Species ?? 0);
+                                    if (!frName.Contains(nameFilter, StringComparison.OrdinalIgnoreCase))
+                                        continue;
+                                }
+                                if (!string.IsNullOrEmpty(tagFilter))
+                                {
+                                    var meta = store.GetOrCreate(mon.UniqueID);
+                                    if (!meta.Tags.Any(t => t.ToLower().Contains(tagFilter)))
+                                        continue;
+                                }
                                 if (!string.IsNullOrEmpty(commentFilter))
                                 {
                                     var meta = store.GetOrCreate(mon.UniqueID);
@@ -533,47 +536,10 @@ namespace PokeViewer
             else if (fileTreeView.SelectedNode.Tag is string filePath)
                 id = Path.GetFileName(filePath);
             if (string.IsNullOrEmpty(id)) return;
-            // Retrouver le chemin du dossier Pokémon Data
+            // Ouvrir directement le dossier Pokemon Data\ID
             string exeDir = AppDomain.CurrentDomain.BaseDirectory;
             string dataRoot = Path.Combine(exeDir, "Pokemon Data");
-            // Retrouver le chemin relatif dans l'arborescence
-            TreeNode? node = fileTreeView.SelectedNode;
-            var pathParts = new List<string>();
-            bool boxAdded = false;
-            while (node != null && node.Parent != null)
-            {
-                if (node.Text.StartsWith("Boîte ") && !boxAdded)
-                {
-                    pathParts.Insert(0, node.Text);
-                    boxAdded = true;
-                }
-                else if (!(node.Text.StartsWith("Boîte ") && boxAdded))
-                {
-                    if (node.Tag is PkxFilesSaveUtil.BoxPokemonInfo)
-                    {
-                        // Pour la save, on retire l'extension
-                        if (node.Parent.Tag is string savePath)
-                        {
-                            var saveName = node.Parent.Text;
-                            var saveNameNoExt = Path.GetFileNameWithoutExtension(saveName);
-                            pathParts.Insert(0, saveNameNoExt);
-                            node = node.Parent.Parent;
-                            continue;
-                        }
-                    }
-                    else if (node.Tag is string)
-                    {
-                        var saveName = node.Text;
-                        var saveNameNoExt = Path.GetFileNameWithoutExtension(saveName);
-                        pathParts.Insert(0, saveNameNoExt);
-                    }
-                    else
-                        pathParts.Insert(0, node.Text);
-                }
-                node = node.Parent;
-            }
-            // On cherche le dossier qui contient l'ID
-            string monDir = Path.Combine(dataRoot, Path.Combine(pathParts.ToArray()), id);
+            string monDir = Path.Combine(dataRoot, id);
             if (Directory.Exists(monDir))
                 System.Diagnostics.Process.Start("explorer.exe", monDir);
             else

@@ -14,15 +14,19 @@ namespace PokeViewer
         private List<string> filteredIds = new();
         private Dictionary<string, CheckBox> evolutionCheckboxes = new();
         private MetadataStore store; // Added for MetadataStore
+        // private List<string> conflictIds; // SUPPRIMÉ
+        private Dictionary<string, List<PkxFilesSaveUtil.BoxPokemonInfo>> cloneGroups;
 
         public StartupPopup(
             List<string> newIds,
             List<string> evolutionIds,
-            List<string> conflictIds,
             List<string> removedIds,
+            Dictionary<string, List<PkxFilesSaveUtil.BoxPokemonInfo>> cloneGroups,
             Dictionary<string, PkxFilesSaveUtil.BoxPokemonInfo> allBoxMons,
             MetadataStore store)
         {
+            // this.conflictIds = conflictIds; // SUPPRIMÉ
+            this.cloneGroups = cloneGroups;
             Text = "Synchronisation des Pokémon";
             Width = 700;
             Height = 500;
@@ -91,18 +95,6 @@ namespace PokeViewer
                 }
                 y += 8;
             }
-            if (conflictIds.Count > 0)
-            {
-                AddLabel("Conflits détectés :");
-                foreach (var id in conflictIds)
-                {
-                    string desc = allBoxMons.TryGetValue(id, out var mon) ?
-                        $"[Conflit] {GetMonDesc(mon)} (Save: {mon?.SaveFileName ?? "?"}) (ID: {id})" : $"[Conflit] ID: {id}";
-                    AddText(desc);
-                    filteredIds.Add(id);
-                }
-                y += 8;
-            }
             if (removedIds.Count > 0)
             {
                 AddLabel("Suppressions détectées :");
@@ -114,6 +106,27 @@ namespace PokeViewer
                     filteredIds.Add(id);
                 }
                 y += 8;
+            }
+            // Affichage des clones détectés
+            if (cloneGroups.Count > 0)
+            {
+                foreach (var kv in cloneGroups)
+                {
+                    var id = kv.Key;
+                    var clones = kv.Value;
+                    AddLabel($"Clones détectés pour ID {id} :");
+                    int cloneIdx = 1;
+                    foreach (var mon in clones)
+                    {
+                        string desc = $"Clone {cloneIdx} : {GetMonDesc(mon)} (Save: {mon?.SaveFileName ?? "?"})";
+                        var cb = new CheckBox { Text = desc + "  → Conserver ce clone", Left = 20, Top = y, Width = 650 };
+                        panel.Controls.Add(cb);
+                        evolutionCheckboxes[$"{id}__clone{cloneIdx}"] = cb;
+                        y += 24;
+                        cloneIdx++;
+                    }
+                    y += 8;
+                }
             }
             if (panel.Controls.Count == 0)
             {
@@ -129,31 +142,75 @@ namespace PokeViewer
 
         public List<string> GetFilteredIds()
         {
+            // Gestion des clones : pour chaque groupe, si plusieurs sont cochés, créer les dossiers avec suffixe
+            foreach (var kv in cloneGroups)
+            {
+                var id = kv.Key;
+                var clones = kv.Value;
+                int idx = 1;
+                foreach (var mon in clones)
+                {
+                    var key = $"{id}__clone{idx}";
+                    if (evolutionCheckboxes.TryGetValue(key, out var cb) && cb.Checked)
+                    {
+                        string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+                        string dataRoot = Path.Combine(exeDir, "Pokemon Data");
+                        string baseDir = Path.Combine(dataRoot, id);
+                        string finalDir = baseDir;
+                        if (idx > 1)
+                        {
+                            int n = idx;
+                            finalDir = baseDir + $"_({n})";
+                        }
+                        if (!Directory.Exists(finalDir))
+                            Directory.CreateDirectory(finalDir);
+                    }
+                    idx++;
+                }
+            }
             // On ajoute seulement les évolutions confirmées
-            var confirmedEvos = evolutionCheckboxes.Where(kv => kv.Value.Checked).Select(kv => kv.Key).ToList();
-            // Pour chaque évolution confirmée, mettre à jour l'ID dans le store et renommer le dossier
+            var confirmedEvos = evolutionCheckboxes.Where(kv => kv.Value.Checked && !kv.Key.Contains("__clone")).Select(kv => kv.Key).ToList();
+            // Gestion des conflits (copies parfaites) SUPPRIMÉ
+            // On suppose que les conflits sont dans conflictIds et affichés avec des CheckBox (à adapter si besoin)
+            // Pour chaque conflit, si plusieurs sont cochés, on incrémente le nom du dossier
+            // (Ici, on suppose que chaque conflit correspond à un ID unique, mais il peut y avoir plusieurs copies)
+            // On va créer les dossiers avec suffixe si besoin
+            // foreach (var id in conflictIds) // SUPPRIMÉ
+            // {
+            //     // Si l'utilisateur a coché ce conflit (à adapter si CheckBox) // SUPPRIMÉ
+            //     if (evolutionCheckboxes.TryGetValue(id, out var cb) && cb.Checked) // SUPPRIMÉ
+            //     {
+            //         // Chercher un nom de dossier libre // SUPPRIMÉ
+            //         string exeDir = AppDomain.CurrentDomain.BaseDirectory; // SUPPRIMÉ
+            //         string dataRoot = Path.Combine(exeDir, "Pokemon Data"); // SUPPRIMÉ
+            //         string baseDir = Path.Combine(dataRoot, id); // SUPPRIMÉ
+            //         string finalDir = baseDir; // SUPPRIMÉ
+            //         int n = 2; // SUPPRIMÉ
+            //         while (Directory.Exists(finalDir)) // SUPPRIMÉ
+            //         { // SUPPRIMÉ
+            //             finalDir = baseDir + $"_({n})"; // SUPPRIMÉ
+            //             n++; // SUPPRIMÉ
+            //         } // SUPPRIMÉ
+            //         Directory.CreateDirectory(finalDir); // SUPPRIMÉ
+            //         selectedConflicts.Add(finalDir); // SUPPRIMÉ
+            //     } // SUPPRIMÉ
+            // } // SUPPRIMÉ
+            // Pour les évolutions, on garde la logique précédente
             foreach (var evoId in confirmedEvos)
             {
-                // On cherche l'ancien ID (base d'ID identique mais espèce différente)
                 var baseId = GetBaseId(evoId);
                 var oldId = store.Entries.Keys.FirstOrDefault(k => GetBaseId(k) == baseId && GetSpeciesFromId(k) != GetSpeciesFromId(evoId));
                 if (!string.IsNullOrEmpty(oldId))
                 {
-                    // Copier les métadonnées
                     store.Entries[evoId] = store.Entries[oldId];
                     store.Entries.Remove(oldId);
-                    // Renommer le dossier dans Pokemon Data
                     string exeDir = AppDomain.CurrentDomain.BaseDirectory;
                     string dataRoot = Path.Combine(exeDir, "Pokemon Data");
                     var monDirOld = FindPokemonDir(dataRoot, oldId);
                     var monDirNew = FindPokemonDir(dataRoot, evoId);
                     if (Directory.Exists(monDirOld))
                     {
-                        try
-                        {
-                            Directory.Move(monDirOld, monDirNew);
-                        }
-                        catch { }
+                        try { Directory.Move(monDirOld, monDirNew); } catch { }
                     }
                 }
             }
