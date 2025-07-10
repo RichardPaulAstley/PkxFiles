@@ -34,6 +34,8 @@ namespace PokeViewer
         private Button saveCommentButton = new();
         private Button saveTagButton = new();
         private Button openFolderButton = new();
+        // Ajout du label compteur
+        private Label pokemonCountLabel = new();
 
         private static readonly string[] PokemonExtensions = new[]
         {
@@ -138,6 +140,23 @@ namespace PokeViewer
             Controls.Add(tagFilterButton);
             Controls.Add(commentFilterBox);
             Controls.Add(commentFilterButton);
+
+            // Ajout du label compteur en bas à droite
+            pokemonCountLabel.Text = "Pokémon trouvés : 0";
+            pokemonCountLabel.AutoSize = true;
+            pokemonCountLabel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            pokemonCountLabel.Font = new Font(FontFamily.GenericSansSerif, 10, FontStyle.Bold);
+            pokemonCountLabel.Left = this.ClientSize.Width - 220;
+            pokemonCountLabel.Top = this.ClientSize.Height - 30;
+            pokemonCountLabel.BackColor = Color.Transparent;
+            pokemonCountLabel.BringToFront();
+            this.Controls.Add(pokemonCountLabel);
+            this.Resize += (s, e) =>
+            {
+                // Repositionner le label lors du redimensionnement
+                pokemonCountLabel.Left = this.ClientSize.Width - pokemonCountLabel.Width - 20;
+                pokemonCountLabel.Top = this.ClientSize.Height - pokemonCountLabel.Height - 10;
+            };
 
             Load += (_, _) => OnStartupScan();
         }
@@ -279,15 +298,21 @@ namespace PokeViewer
         {
             fileTreeView.Nodes.Clear();
             if (string.IsNullOrEmpty(currentFolder) || !Directory.Exists(currentFolder))
+            {
+                UpdatePokemonCount(0);
                 return;
+            }
             var root = new DirectoryInfo(currentFolder);
-            var rootNode = CreateDirectoryNodeWithSaves(root);
+            int count = 0;
+            var rootNode = CreateDirectoryNodeWithSaves(root, ref count);
             fileTreeView.Nodes.Add(rootNode);
             if (fileTreeView.Nodes.Count > 0)
                 fileTreeView.Nodes[0].Expand();
+            UpdatePokemonCount(count);
         }
 
-        private TreeNode CreateDirectoryNodeWithSaves(DirectoryInfo dir)
+        // Nouvelle version avec compteur
+        private TreeNode CreateDirectoryNodeWithSaves(DirectoryInfo dir, ref int count)
         {
             var node = new TreeNode(dir.Name);
             foreach (var file in dir.GetFiles())
@@ -295,6 +320,7 @@ namespace PokeViewer
                 if (PokemonExtensions.Contains(file.Extension.ToLower()))
                 {
                     node.Nodes.Add(new TreeNode(file.Name) { Tag = file.FullName });
+                    count++;
                 }
                 else if (SaveExtensions.Contains(file.Extension.ToLower()) || file.Name.ToLower() == "main")
                 {
@@ -312,21 +338,18 @@ namespace PokeViewer
                             {
                                 if (filteredIds.Count > 0 && !filteredIds.Contains(mon.UniqueID))
                                     continue;
-                                // Filtrage par nom (français)
                                 if (!string.IsNullOrEmpty(nameFilter))
                                 {
                                     var frName = GetFrenchName(mon.Pkm?.Species ?? 0);
                                     if (!frName.Contains(nameFilter, StringComparison.OrdinalIgnoreCase))
                                         continue;
                                 }
-                                // Filtrage par tag
                                 if (!string.IsNullOrEmpty(tagFilter))
                                 {
                                     var meta = store.GetOrCreate(mon.UniqueID);
                                     if (!meta.Tags.Any(t => t.ToLower().Contains(tagFilter)))
                                         continue;
                                 }
-                                // Filtrage par commentaire
                                 if (!string.IsNullOrEmpty(commentFilter))
                                 {
                                     var meta = store.GetOrCreate(mon.UniqueID);
@@ -335,6 +358,7 @@ namespace PokeViewer
                                 }
                                 var monName = mon.Pkm?.Nickname ?? "?";
                                 partyNode.Nodes.Add(new TreeNode($"{monName} (Slot {mon.Slot + 1})") { Tag = mon });
+                                count++;
                             }
                             if (partyNode.Nodes.Count > 0)
                                 saveNode.Nodes.Add(partyNode);
@@ -367,6 +391,7 @@ namespace PokeViewer
                                 }
                                 var monName = mon.Pkm?.Nickname ?? "?";
                                 boxNode.Nodes.Add(new TreeNode($"{monName} (Slot {mon.Slot + 1})") { Tag = mon });
+                                count++;
                             }
                             if (boxNode.Nodes.Count > 0)
                                 saveNode.Nodes.Add(boxNode);
@@ -382,11 +407,20 @@ namespace PokeViewer
             }
             foreach (var subDir in dir.GetDirectories())
             {
-                var subNode = CreateDirectoryNodeWithSaves(subDir);
+                var subNode = CreateDirectoryNodeWithSaves(subDir, ref count);
                 if (subNode.Nodes.Count > 0)
                     node.Nodes.Add(subNode);
             }
             return node;
+        }
+
+        // Met à jour le texte du label compteur
+        private void UpdatePokemonCount(int count)
+        {
+            pokemonCountLabel.Text = $"Pokémon trouvés : {count}";
+            // Repositionne le label si la taille change
+            pokemonCountLabel.Left = this.ClientSize.Width - pokemonCountLabel.Width - 20;
+            pokemonCountLabel.Top = this.ClientSize.Height - pokemonCountLabel.Height - 10;
         }
 
         private void FileTreeView_AfterSelect(object? sender, TreeViewEventArgs e)
