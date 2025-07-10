@@ -283,7 +283,8 @@ namespace PokeViewer
             var root = new DirectoryInfo(currentFolder);
             var rootNode = CreateDirectoryNodeWithSaves(root);
             fileTreeView.Nodes.Add(rootNode);
-            fileTreeView.ExpandAll();
+            if (fileTreeView.Nodes.Count > 0)
+                fileTreeView.Nodes[0].Expand();
         }
 
         private TreeNode CreateDirectoryNodeWithSaves(DirectoryInfo dir)
@@ -452,7 +453,8 @@ namespace PokeViewer
             var rootNode = CreateFilteredDirectoryNode(root, query);
             if (rootNode != null)
                 fileTreeView.Nodes.Add(rootNode);
-            fileTreeView.ExpandAll();
+            if (fileTreeView.Nodes.Count > 0)
+                fileTreeView.Nodes[0].Expand();
         }
 
         private TreeNode? CreateFilteredDirectoryNode(DirectoryInfo dir, string query)
